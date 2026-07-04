@@ -1,0 +1,7 @@
+# Deployment (CPU-only) dependencies — used by the Dockerfile.
+# torch resolves to the CPU wheel via --extra-index-url download.pytorch.org/whl/cpu
+torch
+numpy
+python-chess>=1.9
+fastapi
+uvicorn

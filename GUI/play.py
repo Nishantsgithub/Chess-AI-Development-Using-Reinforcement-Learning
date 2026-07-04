@@ -1,37 +1,46 @@
-import os
-import pygame
-import chess
-import time
-import MCTS
-import torch
-import AlphaZeroNetwork
+"""
+Legacy desktop GUI (pygame) for playing against the model.
+
+The web app in app/ is the recommended interface; this is kept as the
+original dissertation GUI.
+
+Example:
+    python GUI/play.py --model weights/HPC_20x256.pt --rollouts 100
+"""
+
 import argparse
+import os
+import sys
+import time
+
+import chess
+import pygame
+import torch
+
+# Core modules and piece images live in the repo root.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _REPO_ROOT)
+
+import MCTS
+import AlphaZeroNetwork
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Play Chess with AlphaZero AI.')
-parser.add_argument('--model', type=str, required=True, help='Path to the trained model')
+parser.add_argument('--model', type=str,
+                    default=os.path.join(_REPO_ROOT, 'weights', 'HPC_20x256.pt'),
+                    help='Path to the trained model')
 parser.add_argument('--verbose', action='store_true', help='Print verbose information')
 parser.add_argument('--rollouts', type=int, default=100, help='Number of MCTS rollouts')
 parser.add_argument('--threads', type=int, default=1, help='Number of threads for MCTS rollouts')
-parser.add_argument('--mode', type=str, default='h', help='Play mode. "h" for human vs AI, "a" for AI vs AI')
+parser.add_argument('--color', type=str, default='b',
+                    help="Model's color: 'w' or 'b' (you play the other side)")
 
 args = parser.parse_args()
 
 # Prepare neural network
-modelFile = "/data/acp22np/ScalableML/Alpha-zero/weights/AlphaZeroNet_20x256.pt"
 alphaZeroNet = AlphaZeroNetwork.AlphaZeroNet(20, 256)
-
-# Toggle for cpu/gpu
-cuda = False
-if cuda:
-    weights = torch.load(modelFile)
-else:
-    weights = torch.load(modelFile, map_location=torch.device('cpu'))
-
+weights = torch.load(args.model, map_location=torch.device('cpu'))
 alphaZeroNet.load_state_dict(weights)
-
-if cuda:
-    alphaZeroNet = alphaZeroNet.cuda()
 
 for param in alphaZeroNet.parameters():
     param.requires_grad = False
@@ -45,15 +54,10 @@ verbose = args.verbose
 
 # Initialize Chess AI
 board = chess.Board()
-model_color = chess.WHITE # Set this to chess.WHITE if you want the AI to play as White
-
+model_color = chess.WHITE if args.color.lower() == 'w' else chess.BLACK
 
 # Initialize Pygame
 pygame.init()
-
-# Define the colors
-BLACK = pygame.Color('black')
-WHITE = pygame.Color('white')
 
 # Define the square size and board dimensions
 SQUARE_SIZE = 80
@@ -65,28 +69,21 @@ for piece_type in [chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUE
     for color in [chess.WHITE, chess.BLACK]:
         piece_key = (piece_type, color)
         piece_color_code = "w" if color == chess.WHITE else "b"
-        image_path = f"/data/acp22np/ScalableML/Alpha-zero/images/{piece_color_code}{chess.piece_symbol(piece_type).upper()}.png"
-        
-        # Check if the image file exists
+        image_path = os.path.join(
+            _REPO_ROOT, 'images',
+            f"{piece_color_code}{chess.piece_symbol(piece_type).upper()}.png")
+
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image file not found: {image_path}")
 
-        piece_images[piece_key] = pygame.transform.scale(pygame.image.load(image_path), (SQUARE_SIZE, SQUARE_SIZE))
+        piece_images[piece_key] = pygame.transform.scale(
+            pygame.image.load(image_path), (SQUARE_SIZE, SQUARE_SIZE))
 
 # Create the Pygame window
 screen = pygame.display.set_mode((BOARD_SIZE, BOARD_SIZE))
+pygame.display.set_caption('Hybrid RL Chess')
 
-# Initialize Chess AI
-modelFile = "/data/acp22np/ScalableML/Alpha-zero/weights/AlphaZeroNet_20x256.pt"
-alphaZeroNet = AlphaZeroNetwork.AlphaZeroNet(20, 256)
-weights = torch.load(modelFile, map_location=torch.device('cpu'))
-alphaZeroNet.load_state_dict(weights)
-alphaZeroNet.eval()
-
-# Create chess board object
-board = chess.Board()
 dragging_piece = None
-
 
 
 # Function to convert Pygame coordinates to chess coordinates
@@ -94,25 +91,28 @@ def get_chess_coordinates(pygame_x, pygame_y):
     file = pygame_x // SQUARE_SIZE
     rank = 7 - pygame_y // SQUARE_SIZE
     return chess.square(file, rank)
-    
+
+
 # Function to convert chess coordinates to Pygame coordinates
 def get_pygame_coordinates(square):
     file = chess.square_file(square)
     rank = 7 - chess.square_rank(square)
     return file * SQUARE_SIZE, rank * SQUARE_SIZE
 
+
 # Function to display the chess board
 def display_board():
-    light_square_color = pygame.Color("#F0D9B5")  # Light square color (e.g., cream)
-    dark_square_color = pygame.Color("#B58863")   # Dark square color (e.g., brown)
+    light_square_color = pygame.Color("#F0D9B5")  # Light square color
+    dark_square_color = pygame.Color("#B58863")   # Dark square color
 
-    screen.fill(pygame.Color("white"))  # Set the background color of the board
+    screen.fill(pygame.Color("white"))
 
     for square in chess.SQUARES:
         file = chess.square_file(square)
         rank = chess.square_rank(square)
-        square_color = light_square_color if (file + rank) % 2 == 0 else dark_square_color
-        pygame.draw.rect(screen, square_color, (file * SQUARE_SIZE, rank * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+        square_color = light_square_color if (file + rank) % 2 == 1 else dark_square_color
+        pygame.draw.rect(screen, square_color,
+                         (file * SQUARE_SIZE, (7 - rank) * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
 
     for square, piece in board.piece_map().items():
         piece_key = (piece.piece_type, piece.color)
@@ -147,15 +147,14 @@ while running:
                 if move in board.legal_moves:
                     board.push(move)
                     display_board()  # Update the board immediately after player's move
-                    dragging_piece = None
 
                 dragging_piece = None
 
-        elif event.type == pygame.KEYDOWN:  
-            if event.key == pygame.K_t:  
-                if len(board.move_stack) >= 2:  
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_t:
+                if len(board.move_stack) >= 2:
                     board.pop()
-                    board.pop()  
+                    board.pop()
                     print("Took back last move.")
 
     # Check if the game is over
@@ -171,7 +170,7 @@ while running:
 
     # Only get model move if the game is not over
     if running and board.turn == model_color:
-        print("Model is thinking...")  # Print message when model starts thinking
+        print("Model is thinking...")
         starttime = time.perf_counter()
         with torch.no_grad():
             root = MCTS.Root(board, alphaZeroNet)
@@ -182,19 +181,19 @@ while running:
         elapsed = endtime - starttime
         Q = root.getQ()
         N = root.getN()
-        
+
         nps = N / elapsed
 
         same_paths = root.same_paths
-        
+
         if verbose:
-            print( root.getStatisticsString() )
-            print( 'total rollouts {} Q {:0.3f} duplicate paths {} elapsed {:0.2f} nps {:0.2f}'.format( int( N ), Q, same_paths, elapsed, nps ) )
+            print(root.getStatisticsString())
+            print('total rollouts {} Q {:0.3f} duplicate paths {} elapsed {:0.2f} nps {:0.2f}'.format(
+                int(N), Q, same_paths, elapsed, nps))
 
         edge = root.maxNSelect()
         model_move = edge.getMove()
-        print( 'best move {}'.format( str( model_move ) ) )
+        print('best move {}'.format(str(model_move)))
         board.push(model_move)
 
 pygame.quit()
-

@@ -2,7 +2,6 @@
 import encoder
 import math
 from threading import Thread
-from atomic import AtomicLong
 import time
 
 def calcUCT( edge, N_p ):

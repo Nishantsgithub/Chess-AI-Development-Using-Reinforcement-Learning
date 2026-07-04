@@ -1,0 +1,12 @@
+# Core — playing against the trained model (app/ and playchess.py)
+torch>=2.0
+numpy
+python-chess>=1.9
+fastapi
+uvicorn[standard]
+
+# Training / experiments (optional)
+# matplotlib        # loss plots in train_self.py
+# pexpect           # selfplay game generation (Linux/HPC only)
+# tianshou          # DQN/DDQN endgame experiments (dqn_tianshou_DQN.py)
+# pygame            # legacy desktop GUI (GUI/play.py)

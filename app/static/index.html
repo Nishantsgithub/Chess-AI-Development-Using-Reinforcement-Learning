@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chess vs Hybrid RL Model</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<main class="layout">
+
+  <aside class="panel left-panel">
+    <header class="brand">
+      <h1>Hybrid RL Chess</h1>
+      <p class="sub" id="model-name">AlphaZero-style · MCTS</p>
+    </header>
+
+    <div class="settings-row">
+      <div class="swatches" title="Board theme">
+        <button class="swatch" data-theme="classic" title="Classic"><i style="background:#F0D9B5"></i><i style="background:#B58863"></i></button>
+        <button class="swatch" data-theme="green" title="Green"><i style="background:#EBECD0"></i><i style="background:#779556"></i></button>
+        <button class="swatch" data-theme="blue" title="Ice"><i style="background:#DEE3E6"></i><i style="background:#8CA2AD"></i></button>
+        <button class="swatch" data-theme="slate" title="Slate"><i style="background:#B8C0CC"></i><i style="background:#5E6B7E"></i></button>
+      </div>
+      <div class="setting-btns">
+        <button class="iconbtn" id="btn-sound" title="Sound on/off">🔊</button>
+        <button class="iconbtn" id="btn-coords" title="Show coordinates">a1</button>
+        <button class="iconbtn" id="btn-flip" title="Flip board">⇅</button>
+      </div>
+    </div>
+
+    <section class="clock-card" id="clock-top">
+      <div class="player-label"><span class="dot" id="dot-top"></span><span id="name-top">Model</span></div>
+      <div class="clock" id="time-top">--:--</div>
+      <div class="captured" id="cap-top"></div>
+    </section>
+
+    <section class="thinking" id="thinking" hidden>
+      <span class="spinner"></span> Model is thinking<span class="dots"></span>
+    </section>
+
+    <section class="clock-card" id="clock-bottom">
+      <div class="player-label"><span class="dot" id="dot-bottom"></span><span id="name-bottom">You</span></div>
+      <div class="clock" id="time-bottom">--:--</div>
+      <div class="captured" id="cap-bottom"></div>
+    </section>
+
+    <section class="search-stats" id="search-stats" hidden>
+      <h3>Last search</h3>
+      <div class="stats-grid">
+        <div><span id="stat-rollouts">–</span><label>rollouts</label></div>
+        <div><span id="stat-time">–</span><label>seconds</label></div>
+        <div><span id="stat-nps">–</span><label>nodes/sec</label></div>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button class="btn subtle" id="btn-resign">Resign</button>
+      <button class="btn" id="btn-new">New game</button>
+    </div>
+  </aside>
+
+  <section class="board-wrap">
+    <div class="eval-wrap" title="Model's evaluation (white winning chance)">
+      <div class="eval-bar"><div class="eval-white" id="eval-white"></div></div>
+      <span class="eval-label" id="eval-label">50%</span>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <aside class="panel right-panel">
+    <div class="tools-row">
+      <button class="toolbtn" id="btn-fen" title="Copy the shown position as FEN">FEN</button>
+      <button class="toolbtn" id="btn-pgn" title="Download the game as PGN">PGN</button>
+      <button class="toolbtn" id="btn-png" title="Save the shown position as an image">PNG</button>
+    </div>
+    <h3>Moves</h3>
+    <ol class="movelist" id="movelist"></ol>
+    <p class="tip">← → to step through · right-drag to draw arrows</p>
+  </aside>
+
+</main>
+
+<!-- New game dialog -->
+<div class="overlay" id="setup-overlay">
+  <div class="dialog">
+    <h2>New game</h2>
+    <p class="dialog-sub">Pick a time control — the model paces its thinking to the clock, so longer games mean deeper, stronger play.</p>
+
+    <div id="tc-block">
+      <div class="field-label">Time control (per side)</div>
+      <div class="tc-grid">
+        <button class="tc" data-min="5">5<span>min · blitz</span></button>
+        <button class="tc selected" data-min="10">10<span>min · rapid</span></button>
+        <button class="tc" data-min="30">30<span>min · classical</span></button>
+        <button class="tc" data-min="custom">⚙<span>custom</span></button>
+      </div>
+      <div class="custom-tc" id="custom-tc">
+        <label>Minutes <input type="number" id="custom-min" value="10" min="1" max="180"></label>
+        <label>Increment (s) <input type="number" id="custom-inc" value="0" min="0" max="60"></label>
+      </div>
+    </div>
+
+    <div class="field-label">Model strength</div>
+    <div class="tc-grid two">
+      <button class="strength tc selected" data-sec="0">⏱<span>clock-paced</span></button>
+      <button class="strength tc" data-sec="60">∞<span>full power</span></button>
+    </div>
+    <p class="hint-text" id="strength-hint">Clock-paced: the model shares your time control and can lose on time.</p>
+
+    <div class="field-label">Play as</div>
+    <div class="color-grid">
+      <button class="colorbtn selected" data-color="white"><img src="/pieces/wK.png" alt="">White</button>
+      <button class="colorbtn" data-color="black"><img src="/pieces/bK.png" alt="">Black</button>
+      <button class="colorbtn" data-color="random">🎲 Random</button>
+    </div>
+
+    <button class="btn big" id="btn-start">Start game</button>
+  </div>
+</div>
+
+<!-- Waiting room: shown when the model is busy in another game -->
+<div class="overlay" id="busy-overlay" hidden>
+  <div class="dialog over-card">
+    <div class="over-icon">♟️</div>
+    <h2>The model is in another game</h2>
+    <p class="dialog-sub">One game runs at a time so every player gets the model's full strength.
+    You're in line — your game will start automatically as soon as the board frees up.</p>
+    <p class="dialog-sub waiting-line"><span class="spinner"></span> Waiting for the board…</p>
+    <button class="btn subtle" id="btn-busy-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Promotion picker -->
+<div class="overlay" id="promo-overlay" hidden>
+  <div class="dialog promo">
+    <h2>Promote to</h2>
+    <div class="promo-grid" id="promo-grid"></div>
+  </div>
+</div>
+
+<!-- Game over dialog -->
+<div class="overlay" id="over-overlay" hidden>
+  <div class="dialog over-card">
+    <div class="over-icon" id="over-icon">♔</div>
+    <h2 id="over-title">Game over</h2>
+    <p class="dialog-sub" id="over-detail"></p>
+    <div class="over-stats" id="over-stats"></div>
+    <div class="over-actions">
+      <button class="btn big" id="btn-rematch">Rematch</button>
+      <div class="over-secondary">
+        <button class="btn subtle" id="btn-over-new">New game</button>
+        <button class="btn subtle" id="btn-over-pgn">Download PGN</button>
+        <button class="btn subtle" id="btn-over-close">View board</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
