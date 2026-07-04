@@ -1,17 +1,23 @@
-# Chess AI Development Using Reinforcement Learning
+# ♟️ Chess AI Development Using Reinforcement Learning
 
-A hybrid chess engine that combines **supervised learning on expert games** with **AlphaZero-style MCTS self-play refinement** — built for my MSc Data Analytics dissertation at the University of Sheffield ([full dissertation PDF](Dissertation.pdf)), and now playable in your browser through a modern web app.
+[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![python-chess](https://img.shields.io/badge/python--chess-1.9+-green)](https://github.com/niklasf/python-chess)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+**A hybrid chess engine that learned from experts, then taught itself.** Supervised pre-training on millions of engine games + AlphaZero-style MCTS self-play refinement — strong play at a fraction of AlphaZero's compute. Built for my MSc Data Analytics dissertation at the University of Sheffield ([read the full dissertation](Dissertation.pdf)) and playable in your browser.
 
 ![Playing against the model in the web app](docs/app-screenshot.png)
 
-## Highlights
+## ✨ Highlights
 
-- **AlphaZero-style network**: 20 residual blocks × 256 filters, value + policy heads, driven by a parallel Monte Carlo Tree Search with virtual loss.
-- **Hybrid training**: pre-training on the CCRL expert dataset (~2.5M engine games) followed by epsilon-greedy MCTS self-play fine-tuning — reaching strong play at a fraction of full AlphaZero's compute cost.
-- **Results**: the hybrid model beat Komodo 23/24 (Elo 2700/2900) and Stockfish levels 6–7 (2500/2700), and drew against Komodo 25 (3200) and Stockfish level 8 (3000).
-- **Web app** (`app/`): play the model with real chess clocks — it paces its thinking to the time control like a human. Premove, move animation, themes, arrows, eval bar, PGN/FEN export, and one-command launch.
+- 🏆 **Beat Komodo 24 (Elo 2900) and Stockfish level 7** — drew with Komodo 25 (3200) and Stockfish 8 (3000)
+- 🧠 **AlphaZero-style network**: 20 residual blocks × 256 filters, dual value + policy heads, parallel MCTS with virtual loss
+- ⚡ **~30% less compute** than a pure self-play pipeline, thanks to expert-guided pre-training
+- ⏱️ **Human-like time management**: in the web app, the model budgets its thinking from a real chess clock
+- 🌐 **Deployment-ready**: multi-session server, Docker image, one-game-at-a-time hosting mode
 
-## Play against the model
+## 🎮 Play against the model
 
 ```bash
 git clone https://github.com/Nishantsgithub/Chess-AI-Development-Using-Reinforcement-Learning.git
@@ -20,81 +26,131 @@ pip install -r requirements.txt
 python app/server.py
 ```
 
-Your browser opens automatically. Pick a time control (5/10/30 min or custom) — the model budgets its thinking from its own clock, so longer games mean deeper, stronger search. Or pick **full power** mode: no clocks, maximum think time per move.
+Your browser opens automatically. Pick **5 / 10 / 30 minutes** or a custom clock — the model paces its search to the time control, so longer games mean deeper, stronger play. Or choose **∞ full power**: no clocks, maximum think time every move.
 
-The engine automatically uses your NVIDIA GPU if a CUDA build of PyTorch is installed (roughly 3× the search speed); otherwise it runs on CPU.
+| | |
+|---|---|
+| 🕐 Real chess clocks | the model can flag, and so can you |
+| ⚡ Premove | queue your reply while the model thinks |
+| 🎨 4 board themes | classic, green, ice, slate |
+| 📈 Live eval bar | straight from the network's value head |
+| 🏹 Analysis arrows | right-drag to draw, right-click to highlight |
+| ⏪ Move review | step through the game with ← → |
+| 🔊 Sounds | move / capture / castle / check / promotion / low time |
+| 📦 Export | PGN download, FEN copy, board PNG snapshot |
+| 🔍 Search stats | rollouts, nodes/sec, and reused tree per move |
 
-**App features**: per-move MCTS statistics (rollouts / nodes per second / search-tree reuse), premoves while the model thinks, click or drag moves with legal-move hints, move-list review (← → keys), right-drag analysis arrows, captured-material display, four board themes, sounds, evaluation bar from the network's value head, PGN download, FEN copy, and board-snapshot PNG export.
+Have an NVIDIA GPU? Install a CUDA build of PyTorch and the engine uses it automatically (~3× the search speed). The engine also **reuses its search tree** between moves — up to half of each search comes free.
 
-### Deployment
+### 🚀 Deployment
 
-The app is multi-session and ships with a [Dockerfile](Dockerfile) (listens on port 7860, Hugging Face Spaces convention). Set `DEPLOYED=1` to enable hosting mode: CPU-tuned think times, rate limiting, and — by design — **one game at a time** (`MAX_ACTIVE_GAMES`), so whoever is playing gets the engine's full strength while other visitors see a waiting room that starts their game automatically.
+Ships with a [Dockerfile](Dockerfile) (port 7860, Hugging Face Spaces convention). Set `DEPLOYED=1` for hosting mode: CPU-tuned budgets, rate limiting, and **one game at a time** — whoever is playing gets the model's full strength while other visitors wait in an auto-starting queue.
 
-## Dissertation results
+## 🔬 The research journey
 
-The research compared reinforcement-learning approaches for chess in four stages:
+The dissertation advanced through four stages, each answering a question the previous one raised:
 
-**1. Endgame (4×4 board, K+Q vs K) — DQN vs DDQN.** DDQN converged to optimal checkmating play in ~30,000 steps (γ = 0.95); vanilla DQN was slower and less stable, matching theory. A myopic discount factor (γ = 0.05) plateaued — long-horizon rewards are essential in chess.
+**Stage 1 — Can RL solve chess at all? (4×4 endgame, K+Q vs K)**
+DQN vs DDQN on the classic "checkmate with a queen" problem. DDQN converged to optimal checkmating play in ~30,000 steps (γ = 0.95, β = 10). A myopic discount factor (γ = 0.05) stalled at reward 0.8 forever — **chess punishes short-term thinking**, in training as on the board.
 
-**2. Full game — DDQN vs MCTS.** Over 100 games against a random opponent: MCTS scored 28 wins / 9 losses vs DDQN's 2 / 2 — MCTS handles chess's state space far better at practical compute budgets.
+**Stage 2 — Does it scale to the full game?**
+DDQN vs classical MCTS on 8×8 over 100 games against a random opponent:
 
-**3. AlphaZero pipeline.** Iterative self-play training worked (iteration 2 beat iteration 1, winning 8 of 12 decisive games) but was computationally prohibitive at dissertation scale — motivating the hybrid.
+| Model | Wins | Losses | Draws |
+|---|---|---|---|
+| DDQN | 2 | 2 | 96 |
+| **MCTS** | **28** | **9** | **63** |
 
-**4. Hybrid approach** — supervised pre-training + MCTS self-play refinement:
+Value-based RL alone drowned in chess's state space; **tree search was the way forward**.
+
+**Stage 3 — Full AlphaZero?**
+The self-play loop worked — iteration 2 beat iteration 1 with 8 wins to 4 (88 draws), winning promotion at the >55% threshold — but at ~2 hours per 100 games, dissertation-scale compute couldn't feed it. DeepMind trained on 44 *million* games.
+
+**Stage 4 — The Hybrid** 💡
+Pre-train on the CCRL expert dataset (~2.5M top engine games), then refine with epsilon-greedy MCTS self-play (exploration decaying as the game progresses). Games were quality-checked against Stockfish to tune the exploration schedule. The result:
 
 | Opponent (Elo) | As White | As Black |
 |---|---|---|
-| Komodo 25 (3200) | Draw | Draw |
-| Komodo 24 (2900) | **Win** | Draw |
-| Komodo 23 (2700) | **Win** | **Win** |
-| Stockfish level 8 (3000) | Draw | Draw |
-| Stockfish level 7 (2700) | **Win** | Draw |
-| Stockfish level 6 (2500) | **Win** | **Win** |
+| Komodo 25 (3200) | ½ Draw | ½ Draw |
+| Komodo 24 (2900) | ✅ **Win** | ½ Draw |
+| Komodo 23 (2700) | ✅ **Win** | ✅ **Win** |
+| Stockfish 8 (3000) | ½ Draw | ½ Draw |
+| Stockfish 7 (2700) | ✅ **Win** | ½ Draw |
+| Stockfish 6 (2500) | ✅ **Win** | ✅ **Win** |
 
-A hybrid model bootstrapped from *human* games (~2500 Elo data) and refined by self-play went 11–9 against the CCRL-trained baseline (~2900–3000 Elo data) — evidence that the self-play mechanism itself adds real strength.
+And the wildest finding: a hybrid bootstrapped from *human* games (~2500 Elo data) and refined by self-play went **11–9 against the CCRL-trained baseline** built on ~2900–3000 Elo data — the self-play mechanism itself creates real strength, not just the data quality.
 
-## Model weights
+## ⚙️ How the engine works
 
-All weights are the same 20×256 architecture and are interchangeable in the app via `--model`:
+- **Input**: the board as a 16-plane 8×8 tensor (piece positions, turn, castling rights)
+- **Network**: conv stem → 20 residual blocks (256 filters) → value head (tanh, "who's winning?") + policy head (4608 logits, "what's promising?")
+- **Search**: MCTS guided by the policy prior using UCT selection; parallel rollouts use **virtual loss** so threads explore different lines; the value head replaces random playouts
+- **Anti-repetition**: when clearly winning, the engine avoids drifting into threefold-repetition draws — a fix promised in the dissertation's future-work list, delivered in the app
+- **Time management** (app): think-budget ≈ remaining clock / 24 + increment, with tree reuse carrying past work forward
 
-| File | Description |
-|---|---|
-| `weights/HPC_20x256.pt` | **The hybrid model trained on Sheffield's HPC — the strongest; app default** |
-| `weights/AlphaZeroNet_20x256.pt` | CCRL supervised baseline |
-| `weights/selfplay_iteration1_20x256_epoch29.pt` | Hybrid self-play iteration 1 |
-| `weights/AlphaZero_Iteration2_20x256.pt` | Self-play iteration 2 ("Model 2") |
-| `weights/human_20x256.pt` | Supervised on ~2500-Elo human games |
-| `weights/FineTuned_human_20x256_epoch2.pt` | Human-data model + self-play refinement |
+## 🏋️ Training pipeline (Hybrid)
 
-## Repository structure
+```
+CCRL expert games ──► supervised pre-training ──► base model
+        ▲                                            │
+        │                                            ▼
+   fix_pgn_results.py ◄── selfplay.py (ε-greedy MCTS self-play)
+        │                                            
+        ▼                                            
+  train_self.py (fine-tune) ──► evaluate vs previous best ──► promote if ≥55% ↺
+```
+
+Scripts live in [`training/`](training/) — every step takes standard CLI arguments (see each file's docstring).
+
+## 🗂️ Repository structure
 
 ```
 AlphaZeroNetwork.py    # the network: 20 residual blocks, value + policy heads
 MCTS.py                # parallel MCTS with UCT selection and virtual loss
 encoder.py             # board -> 16-plane tensor; move <-> policy-index mapping
-playchess.py           # original CLI: play or self-play against the model
-app/                   # web app: FastAPI server, clock-aware engine wrapper, UI
-training/              # hybrid training loop: self-play generation + fine-tuning
-experiments/dqn/       # 4x4 endgame DQN/DDQN experiments (Tianshou)
+playchess.py           # original CLI: play or watch self-play
+app/                   # web app: FastAPI server, clock-aware engine, UI
+training/              # hybrid loop: self-play generation + fine-tuning
+experiments/dqn/       # stage-1 endgame DQN/DDQN experiments (Tianshou)
 GUI/                   # legacy pygame desktop GUI
-images/                # piece images (used by both UIs)
-weights/               # trained models (~97 MB each)
-Dissertation.pdf       # the full write-up
+weights/               # six trained models (~97 MB each)
+Dissertation.pdf       # the full write-up (63 pages)
 ```
 
-## The training pipeline (Hybrid approach)
+### 🧬 Model zoo
 
-1. **Supervised pre-training** on CCRL expert games gives the network a strong prior (see `training/CCRLDataset.py`).
-2. **Self-play generation** — `training/selfplay.py` plays the model against itself with epsilon-greedy exploration (`training/playchess_selfplay.py`), decaying exploration as the game progresses; `training/fix_pgn_results.py` fills in results.
-3. **Fine-tuning** — `training/train_self.py` trains on the self-play games (Adam, MSE value loss + cross-entropy policy loss, LR decay).
-4. Evaluate the new model against the previous best; promote it if it wins ≥55% of decisive games, then repeat.
+All the same 20×256 architecture — swap any into the app with `--model`:
 
-## Acknowledgements
+| Weights | What it is |
+|---|---|
+| `HPC_20x256.pt` | 🥇 **The hybrid, trained on Sheffield's HPC — strongest, app default** |
+| `AlphaZeroNet_20x256.pt` | CCRL supervised baseline |
+| `selfplay_iteration1_20x256_epoch29.pt` | Hybrid self-play, iteration 1 |
+| `AlphaZero_Iteration2_20x256.pt` | Self-play iteration 2 ("Model 2") |
+| `human_20x256.pt` | Supervised on ~2500-Elo human games |
+| `FineTuned_human_20x256_epoch2.pt` | The human-data hybrid that beat the CCRL baseline |
 
-- The core network/MCTS/encoder implementation builds on [jackdawkins11/pytorch-alpha-zero](https://github.com/jackdawkins11/pytorch-alpha-zero), substantially extended for this research (hybrid training, epsilon-greedy self-play, repetition avoidance, the web app, GPU support, and search-tree reuse).
-- [python-chess](https://github.com/niklasf/python-chess) for rules and PGN handling; [Tianshou](https://github.com/thu-ml/tianshou) for the DQN experiments.
-- Supervised by Prof. Eleni Vasilaki, Department of Computer Science, University of Sheffield.
+## 📚 Research foundations
 
-## License
+The ideas this project stands on — the reading list behind the dissertation:
+
+| Work | Why it matters here |
+|---|---|
+| [Sutton & Barto — *Reinforcement Learning: An Introduction*](http://incompleteideas.net/book/the-book.html) | The foundations: MDPs, Bellman equations, exploration vs exploitation |
+| [Silver et al. — *Mastering Chess and Shogi by Self-Play* (AlphaZero)](https://arxiv.org/abs/1712.01815) | The blueprint this project adapts to a realistic compute budget |
+| [Mnih et al. — *Playing Atari with Deep RL*](https://arxiv.org/abs/1312.5602) / [*Human-level control*](https://www.nature.com/articles/nature14236) | DQN — experience replay and target networks (stage 1 & 2) |
+| [van Hasselt et al. — *Deep RL with Double Q-learning*](https://arxiv.org/abs/1509.06461) | DDQN — fixing Q-value overestimation (stage 1 & 2) |
+| [Browne et al. — *A Survey of MCTS Methods*](https://ieeexplore.ieee.org/document/6145622) | The search algorithm at the heart of the engine |
+| [Kocsis & Szepesvári — *Bandit based Monte-Carlo Planning*](https://link.springer.com/chapter/10.1007/11871842_29) | UCT — the selection formula MCTS runs on |
+| [Silver et al. — *Mastering the game of Go* (AlphaGo)](https://www.nature.com/articles/nature16961) / [*without human knowledge* (AlphaGo Zero)](https://www.nature.com/articles/nature24270) | Policy+value networks married to tree search |
+| [Lai — *Giraffe: Using Deep RL to Play Chess*](https://arxiv.org/abs/1509.01549) | Proof that a neural net could learn chess evaluation end-to-end |
+
+## 🙏 Acknowledgements
+
+- Core network/MCTS/encoder implementation builds on [jackdawkins11/pytorch-alpha-zero](https://github.com/jackdawkins11/pytorch-alpha-zero), substantially extended for this research (hybrid training, epsilon-greedy self-play, repetition avoidance, the web app, GPU support, search-tree reuse)
+- [python-chess](https://github.com/niklasf/python-chess) for rules and PGN handling · [Tianshou](https://github.com/thu-ml/tianshou) for the DQN experiments
+- Supervised by **Prof. Eleni Vasilaki**, Department of Computer Science, University of Sheffield
+
+## 📄 License
 
 [MIT](LICENSE)
