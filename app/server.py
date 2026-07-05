@@ -361,9 +361,13 @@ def engine_move(req: GameRequest):
             return game.state()
         game.apply_move(move)
         if not game.over:
-            engine_is_white = not game.human
-            q = info['q']
-            game.eval_white = q if engine_is_white else 1.0 - q
+            if info.get('book'):
+                # Book moves carry no search Q; ask the value head instead.
+                game.eval_white = _white_eval(game.board)
+            else:
+                engine_is_white = not game.human
+                q = info['q']
+                game.eval_white = q if engine_is_white else 1.0 - q
         game.last_search = {
             'move': move.uci(),
             'rollouts': info['rollouts'],
@@ -371,6 +375,7 @@ def engine_move(req: GameRequest):
             'elapsed': round(info['elapsed'], 2),
             'nps': round(info['nps'], 1),
             'budget': round(budget, 2),
+            'book': bool(info.get('book')),
         }
         return game.state()
 

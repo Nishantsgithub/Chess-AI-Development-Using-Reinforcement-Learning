@@ -1,9 +1,13 @@
 # ♟️ Chess AI Development Using Reinforcement Learning
 
+[![Play it live](https://img.shields.io/badge/%F0%9F%A4%97%20Play%20it%20live-Hugging%20Face%20Space-yellow)](https://huggingface.co/spaces/niishantx/hybrid-rl-chess)
 [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![python-chess](https://img.shields.io/badge/python--chess-1.9+-green)](https://github.com/niklasf/python-chess)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+> ### ♟️ [**Play against the model right now — live on Hugging Face**](https://huggingface.co/spaces/niishantx/hybrid-rl-chess)
+> No install needed. One game runs at a time so you always face the model at full strength.
 
 **A hybrid chess engine that learned from experts, then taught itself.** Supervised pre-training on millions of engine games + AlphaZero-style MCTS self-play refinement — strong play at a fraction of AlphaZero's compute. Built for my MSc Data Analytics dissertation at the University of Sheffield ([read the full dissertation](Dissertation.pdf)) and playable in your browser.
 
@@ -15,7 +19,8 @@
 - 🧠 **AlphaZero-style network**: 20 residual blocks × 256 filters, dual value + policy heads, parallel MCTS with virtual loss
 - ⚡ **~30% less compute** than a pure self-play pipeline, thanks to expert-guided pre-training
 - ⏱️ **Human-like time management**: in the web app, the model budgets its thinking from a real chess clock
-- 🌐 **Deployment-ready**: multi-session server, Docker image, one-game-at-a-time hosting mode
+- 📖 **Self-distilled opening book**: the model's own deep GPU searches (~6,000 rollouts each) cached ahead of time, so the CPU-hosted live demo plays the opening phase instantly at full strength
+- 🌐 **Live on Hugging Face**: multi-session server, Docker image, one-game-at-a-time hosting mode
 
 ## 🎮 Play against the model
 
@@ -87,6 +92,7 @@ And the wildest finding: a hybrid bootstrapped from *human* games (~2500 Elo dat
 - **Search**: MCTS guided by the policy prior using UCT selection; parallel rollouts use **virtual loss** so threads explore different lines; the value head replaces random playouts
 - **Anti-repetition**: when clearly winning, the engine avoids drifting into threefold-repetition draws — a fix promised in the dissertation's future-work list, delivered in the app
 - **Time management** (app): think-budget ≈ remaining clock / 24 + increment, with tree reuse carrying past work forward
+- **Opening book** ([`tools/build_book.py`](tools/build_book.py)): the opening tree is pre-searched offline on GPU — 20s per position, branching over the opponent's most likely replies (per the model's own policy prior). Online, book positions are answered instantly from the cache; the search only spends CPU where the game is genuinely new. Pure computational efficiency: same model, same moves, none of the cost
 
 ## 🏋️ Training pipeline (Hybrid)
 
@@ -110,6 +116,7 @@ MCTS.py                # parallel MCTS with UCT selection and virtual loss
 encoder.py             # board -> 16-plane tensor; move <-> policy-index mapping
 playchess.py           # original CLI: play or watch self-play
 app/                   # web app: FastAPI server, clock-aware engine, UI
+tools/                 # opening-book distillation, ONNX export
 training/              # hybrid loop: self-play generation + fine-tuning
 experiments/dqn/       # stage-1 endgame DQN/DDQN experiments (Tianshou)
 GUI/                   # legacy pygame desktop GUI

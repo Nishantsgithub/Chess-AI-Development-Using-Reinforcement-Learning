@@ -419,6 +419,12 @@ function renderStats() {
   const st = S.last_search;
   $('search-stats').hidden = !st;
   if (!st) return;
+  if (st.book) {
+    $('stat-rollouts').textContent = '📖';
+    $('stat-time').textContent = 'book';
+    $('stat-nps').textContent = 'move';
+    return;
+  }
   $('stat-rollouts').textContent = st.rollouts.toLocaleString();
   $('stat-time').textContent = st.elapsed;
   $('stat-nps').textContent = st.nps;

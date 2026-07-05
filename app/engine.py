@@ -34,24 +34,42 @@ import encoder
 class Engine:
 
     def __init__(self, weights_path, num_blocks=20, num_filters=256):
-        self.net = AlphaZeroNetwork.AlphaZeroNet(num_blocks, num_filters)
-        state_dict = torch.load(weights_path, map_location=torch.device('cpu'))
-        self.net.load_state_dict(state_dict)
-        self.net.eval()
-        for param in self.net.parameters():
-            param.requires_grad = False
-
         self.cuda = torch.cuda.is_available()
-        if self.cuda:
-            self.net = self.net.cuda()
-            encoder.cuda = True  # encoder moves inputs to the GPU
-            print(f'Using GPU: {torch.cuda.get_device_name(0)}')
+        onnx_path = os.path.splitext(weights_path)[0] + '.onnx'
+        self.onnx = not self.cuda and self._try_onnx(onnx_path)
+
+        if self.onnx:
+            print(f'Using ONNX Runtime (CPU): {onnx_path}')
         else:
-            print('Using CPU (install a CUDA build of PyTorch to use the GPU)')
+            self.net = AlphaZeroNetwork.AlphaZeroNet(num_blocks, num_filters)
+            state_dict = torch.load(weights_path, map_location=torch.device('cpu'))
+            self.net.load_state_dict(state_dict)
+            self.net.eval()
+            for param in self.net.parameters():
+                param.requires_grad = False
+            if self.cuda:
+                self.net = self.net.cuda()
+                encoder.cuda = True  # encoder moves inputs to the GPU
+                print(f'Using GPU: {torch.cuda.get_device_name(0)}')
+            else:
+                print('Using CPU eager torch (no .onnx found; '
+                      'run tools/export_onnx.py for faster CPU inference)')
 
         # Best measured batch for unique rollouts/sec on each device.
         self.batch_size = 32 if self.cuda else 16
         self.weights_name = os.path.basename(weights_path)
+
+        # Opening book distilled from the model's own deep GPU searches
+        # (tools/build_book.py) — instant, full-strength opening play.
+        self.book = {}
+        book_path = os.path.join(os.path.dirname(os.path.abspath(weights_path)),
+                                 'opening_book.json')
+        if os.path.exists(book_path):
+            import json
+            with open(book_path) as f:
+                self.book = json.load(f)
+            print(f'Opening book loaded: {len(self.book)} positions')
+
         # Searches are serialized; concurrent games queue on this lock.
         self.lock = threading.Lock()
         # Per-game search trees for reuse: reuse_key -> (root, fen).
@@ -60,6 +78,26 @@ class Engine:
         # How many think() calls are queued/running, for load-aware budgets.
         self._inflight = 0
         self._meta_lock = threading.Lock()
+
+    def _book_move(self, board):
+        if not self.book or len(board.move_stack) > 16:
+            return None
+        key = ' '.join(board.fen().split()[:4])
+        uci = self.book.get(key)
+        if uci is None:
+            return None
+        move = chess.Move.from_uci(uci)
+        return move if move in board.legal_moves else None
+
+    def _try_onnx(self, onnx_path):
+        if not os.path.exists(onnx_path):
+            return False
+        try:
+            from onnx_net import OnnxAlphaZero
+            self.net = OnnxAlphaZero(onnx_path)
+            return True
+        except ImportError:
+            return False
 
     def forget(self, reuse_key):
         """Drop the carried-over search tree for one game."""
@@ -107,6 +145,13 @@ class Engine:
 
         Returns (move, info) where info holds search statistics for the UI.
         """
+        book_move = self._book_move(board)
+        if book_move is not None:
+            return book_move, {
+                'q': 0.5, 'root_q': 0.5, 'rollouts': 0, 'carried': 0,
+                'elapsed': 0.0, 'queue': 0, 'nps': 0.0, 'book': True,
+            }
+
         if batch_size is None:
             batch_size = self.batch_size
         with self._meta_lock:
