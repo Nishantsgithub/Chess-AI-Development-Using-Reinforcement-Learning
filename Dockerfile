@@ -15,6 +15,7 @@ COPY AlphaZeroNetwork.py MCTS.py encoder.py ./
 COPY app ./app
 COPY images ./images
 COPY weights/HPC_20x256.pt ./weights/HPC_20x256.pt
+COPY weights/opening_book.json ./weights/opening_book.json
 
 ENV DEPLOYED=1
 ENV PORT=7860
