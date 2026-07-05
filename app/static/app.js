@@ -408,11 +408,29 @@ function gotoPly(ply) {
   render();
 }
 
+let evalDisplay = 0.5;   // smoothed value actually drawn
+let evalTarget = 0.5;    // last server value we eased toward
+
 function renderEval() {
-  const p = S.eval_white;
-  $('eval-white').style.height = `${(p * 100).toFixed(1)}%`;
-  const shown = humanIsWhite() ? p : 1 - p;
+  const target = S.eval_white;
+  if (target !== evalTarget) {
+    // Ease toward the new value so single readings can't yank the bar.
+    evalTarget = target;
+    const gap = target - evalDisplay;
+    evalDisplay += Math.abs(gap) < 0.03 ? gap : gap * 0.55;
+  }
+  // Contrast stretch (bar only): the value head lives near 0.5 for most of
+  // a game, so amplify mid-range differences to make edges visible.
+  const p = Math.min(0.99, Math.max(0.01, evalDisplay));
+  const stretched = 1 / (1 + Math.pow((1 - p) / p, 1.8));
+  $('eval-white').style.height = `${(stretched * 100).toFixed(1)}%`;
+  const shown = humanIsWhite() ? evalDisplay : 1 - evalDisplay;
   $('eval-label').textContent = `${Math.round(shown * 100)}%`;
+}
+
+function resetEval(value) {
+  evalDisplay = value;
+  evalTarget = value;
 }
 
 function renderStats() {
@@ -984,6 +1002,7 @@ async function startNewGame(req) {
   gameId = st.game_id;
   localStorage.setItem('hybridrl-game-id', gameId);
   orientation = st.human_color;
+  resetEval(st.eval_white);
   applyState(st);
   playSound('start');
   maybeRequestEngineMove(); // in case the model plays white
@@ -1041,6 +1060,7 @@ try {
       $('setup-overlay').style.display = 'none';
       const st = await res.json();
       orientation = st.human_color;
+      resetEval(st.eval_white);
       applyState(st);
       maybeRequestEngineMove();
     }

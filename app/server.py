@@ -308,8 +308,8 @@ def player_move(req: MoveRequest):
         if move not in game.board.legal_moves:
             raise HTTPException(status_code=400, detail='Illegal move')
         game.apply_move(move)
-    if not game.over:
-        game.eval_white = _white_eval(game.board)
+    # The eval bar updates only from search-backed values (engine moves):
+    # a single raw network call here was noisy and made the bar jitter.
     return game.state()
 
 
@@ -360,14 +360,12 @@ def engine_move(req: GameRequest):
         if game.over:
             return game.state()
         game.apply_move(move)
-        if not game.over:
-            if info.get('book'):
-                # Book moves carry no search Q; ask the value head instead.
-                game.eval_white = _white_eval(game.board)
-            else:
-                engine_is_white = not game.human
-                q = info['q']
-                game.eval_white = q if engine_is_white else 1.0 - q
+        if not game.over and not info.get('book'):
+            # Search-backed eval only; book moves keep the previous value
+            # (openings hover around equal anyway).
+            engine_is_white = not game.human
+            q = info['q']
+            game.eval_white = q if engine_is_white else 1.0 - q
         game.last_search = {
             'move': move.uci(),
             'rollouts': info['rollouts'],
@@ -415,12 +413,6 @@ def resign(req: GameRequest):
                 'reason': 'resignation',
             }
         return game.state()
-
-
-def _white_eval(board):
-    """White's win probability according to a single network call."""
-    q = ENGINE.evaluate(board)
-    return q if board.turn == chess.WHITE else 1.0 - q
 
 
 @app.get('/')

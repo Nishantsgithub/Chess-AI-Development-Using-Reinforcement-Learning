@@ -42,6 +42,9 @@ def main():
     parser.add_argument('--budget', type=float, default=20, help='Seconds per book position')
     parser.add_argument('--depth', type=int, default=8, help='Plies to cover from the start')
     parser.add_argument('--replies', type=int, default=2, help='Opponent replies to branch on')
+    parser.add_argument('--root-replies', type=int, default=4,
+                        help='Opponent replies at the very first move (humans open '
+                             'with e4/d4/c4/Nf3 regardless of what the model prefers)')
     parser.add_argument('--out', default=os.path.join(_REPO_ROOT, 'weights', 'opening_book.json'))
     args = parser.parse_args()
 
@@ -72,7 +75,16 @@ def main():
         value, probs = encoder.callNeuralNetwork(board, engine.net)
         moves = list(board.legal_moves)
         order = np.argsort(probs[:len(moves)])[::-1]
-        return [moves[i] for i in order[:args.replies]]
+        n = args.root_replies if len(board.move_stack) == 0 else args.replies
+        replies = [moves[i] for i in order[:n]]
+        if len(board.move_stack) == 0:
+            # Always cover the openings humans actually play, even if the
+            # model's own prior underrates them.
+            for uci in ('e2e4', 'd2d4', 'c2c4', 'g1f3'):
+                move = chess.Move.from_uci(uci)
+                if move not in replies:
+                    replies.append(move)
+        return replies
 
     def walk(board, engine_to_move, depth_left):
         if depth_left <= 0 or board.is_game_over():
