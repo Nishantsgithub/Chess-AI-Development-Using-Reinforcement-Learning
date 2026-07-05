@@ -7,7 +7,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > ### ♟️ [**Play against the model right now — live on Hugging Face**](https://huggingface.co/spaces/niishantx/hybrid-rl-chess)
-> No install needed. One game runs at a time so you always face the model at full strength.
+> No install needed. One game runs at a time.
+>
+> ⚠️ **Note:** the free hosting runs on a small CPU, so the live demo searches far fewer positions per move than the model is capable of. For the model at **full capacity** — ~15× deeper search on a GPU, plus the untimed ∞ full-power mode — install and run it locally (below). If you have an NVIDIA GPU, it is used automatically.
 
 **A hybrid chess engine that learned from experts, then taught itself.** Supervised pre-training on millions of engine games + AlphaZero-style MCTS self-play refinement — strong play at a fraction of AlphaZero's compute. Built for my MSc Data Analytics dissertation at the University of Sheffield ([read the full dissertation](Dissertation.pdf)) and playable in your browser.
 
